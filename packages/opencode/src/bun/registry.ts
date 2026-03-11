@@ -1,4 +1,5 @@
 import semver from "semver"
+import { text } from "node:stream/consumers"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 
@@ -10,21 +11,26 @@ export namespace PackageRegistry {
   }
 
   export async function info(pkg: string, field: string, cwd?: string): Promise<string | null> {
-    const { code, stdout, stderr } = await Process.run([which(), "info", pkg, field], {
+    const result = Process.spawn([which(), "info", pkg, field], {
       cwd,
+      stdout: "pipe",
+      stderr: "pipe",
       env: {
         ...process.env,
         BUN_BE_BUN: "1",
       },
-      nothrow: true,
     })
 
+    const code = await result.exited
+    const stdout = result.stdout ? await text(result.stdout) : ""
+    const stderr = result.stderr ? await text(result.stderr) : ""
+
     if (code !== 0) {
-      log.warn("bun info failed", { pkg, field, code, stderr: stderr.toString() })
+      log.warn("bun info failed", { pkg, field, code, stderr })
       return null
     }
 
-    const value = stdout.toString().trim()
+    const value = stdout.trim()
     if (!value) return null
     return value
   }
